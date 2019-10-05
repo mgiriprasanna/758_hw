@@ -419,16 +419,18 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
         unsigned index = set_index*m_config.m_assoc+way;
         line_tlb_block *line = m_lines[index];
         if (line->m_tag == tag) {
+             line->print_status();
             if ( line->get_status() == RESERVED ) {
                 idx = index;
-    		printf("We got a hit reserved on addr %x, set_index %u, tag %x, way %u\n", addr, set_index, tag, way);
+    		printf("We got a hit reserved on addr %x, id %u, tag %x, way %u\n", addr, idx, tag, way);
                 return HIT_RESERVED;
             } else if ( line->get_status() == VALID ) {
-    		printf("We got a hit on addr %x, set_index %u, tag %x, way %u\n", addr, set_index, tag, way);
                 idx = index;
+                printf("We got a hit on addr %x, idx %u, tag %x, way %u\n", addr, idx, tag, way);
                 return HIT;
             }else {
                 assert( line->get_status() == INVALID );
+                printf("We got an Invalid line:");
             }
         }
         if (!line->is_reserved_line()) {
@@ -450,10 +452,11 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
                 }
             }
         }
+    
     }
     if ( all_reserved ) {
         //assert( m_config.m_alloc_policy == ON_MISS ); 
-    	printf("We got a reservation fail miss on addr %x, set_index %u\n", addr, set_index);
+    	printf("We got a reservation fail miss on addr %x\n", addr);
         return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
     }
 
@@ -472,7 +475,7 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     //    			 return SECTOR_MISS;
     //    	}
     //}
-    printf("We got a miss on addr %x, set_index %u, tag %x\n", addr, set_index, tag);
+    printf("We got a miss on addr %x, set_index %u, tag %x\n", addr, idx, tag);
 
     return MISS;
 }
@@ -534,13 +537,15 @@ void tlb_array::fill( new_addr_type addr, unsigned time, mem_fetch* mf)
 void tlb_array::fill( new_addr_type addr, unsigned time)
 {
     //assert( m_config.m_alloc_policy == ON_FILL );
-    unsigned idx;
+    unsigned idx = unsigned(-1);
     enum cache_request_status status = probe(addr,idx);
     //assert(status==MISS||status==SECTOR_MISS); // MSHR should have prevented redundant memory request
     if(status==MISS)
     	m_lines[idx]->allocate( m_config.tag(addr), m_config.block_addr(addr), time);
-
-    m_lines[idx]->fill(time);
+    if (status != RESERVATION_FAIL)
+    {
+        m_lines[idx]->fill(time);
+    }   
 }
 
 enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx, mem_fetch* mf, bool probe_mode) const {

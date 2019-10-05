@@ -681,7 +681,7 @@ public:
         // tag + index is required to check for hit/miss. Tag is now identical to the block address.
 
         //return addr >> (m_line_sz_log2+m_nset_log2);
-	printf("For addr %x, line_sz is %u, set is %u, assoc is %u\n", addr, m_line_sz, m_nset, m_assoc);
+	//printf("For addr %x, line_sz is %u, set is %u, assoc is %u\n", addr, m_line_sz, m_nset, m_assoc);
         return addr & ~(new_addr_type)(m_line_sz-1);
     }
     new_addr_type block_addr( new_addr_type addr ) const
@@ -785,18 +785,22 @@ public:
         m_data_port_width = 0;
         m_set_index_function = LINEAR_SET_FUNCTION;
         m_is_streaming = false;
-	m_line_sz = 12;
-	m_nset = 32;
-	m_assoc = 32;
+	m_line_sz = 0;
+	m_nset = 0;
+	m_assoc = 0;
 	}
 	//virtual unsigned set_index(new_addr_type addr) const;
     	void init(char * config, FuncCache status)
     	{
-		m_line_sz = 12;
-		m_nset = 32;
-		m_assoc = 32;
+		m_line_sz = 8;
+		m_nset = 1024;
+		m_assoc = 1;
 		m_replacement_policy = LRU;
 		m_alloc_policy = ON_MISS;
+        m_line_sz_log2 = LOGB2(m_line_sz);
+        m_nset_log2 = LOGB2(m_nset);
+        m_valid = true;
+        original_m_assoc = m_assoc;
 	}
 	unsigned tlb_latency;
 };
@@ -1925,10 +1929,12 @@ public:
     /// Sends next request to lower level of memory
     void cycle() 
     {
+    
     }
     /// Interface for response from lower memory level (model bandwidth restictions in caller)
     void fill( mem_fetch *mf, unsigned time )
     {
+        m_tlb_array->fill(mf->get_addr(), time, mf);
     }
     /// Checks if mf is waiting to be filled by lower memory level
     bool waiting_for_fill( mem_fetch *mf )

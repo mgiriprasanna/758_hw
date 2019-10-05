@@ -1646,7 +1646,7 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue_l1cache( l1_cache *c
         return result;
 
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
-    printf("We are printing mf inside process_memory_access_queue_l1 %x\n", mf->get_addr());
+    //printf("We are printing mf inside process_memory_access_queue_l1 %x\n", mf->get_addr());
     //mf->print(stdout, 1);
     if(m_config->m_L1D_config.l1_latency > 0)
 	{
@@ -1788,10 +1788,16 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason
     printf("accessing for addr %x\n", mf->get_addr());
     //mf->print(stdout, 1);
     enum cache_request_status status = m_tlb->access(mf->get_addr(), mf, gpu_sim_cycle+gpu_tot_sim_cycle, events);
-    printf("cache request status returned is %d\n", status);
-    return 1;
+    if(mf->get_tlb_miss() == true){
+    if((tlb_latency_queue[19]) == NULL){
+    				//fprintf(stdout, "Inserting mf in tlb called");
+                    tlb_latency_queue[19] = mf;
+    }
+    }
+    //return 1;
     if (status != HIT) {
-	return 0;
+    stall_reason = COAL_STALL;
+    return 0;
     }
     else {
 	return 1;
@@ -2154,14 +2160,14 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
         char tlb_name[STRSIZE];
         snprintf(tlb_name, STRSIZE, "tlb_%03d", m_sid);
 	line_tlb_block** new_lines;
-	new_lines = new line_tlb_block*[1024];
-	for (unsigned i = 0; i<1024; i++)
+	new_lines = new line_tlb_block*[1024*1024];
+	for (unsigned i = 0; i<1024*1024; i++)
 		new_lines[i] = new line_tlb_block();
 	
         m_tlb = new tlb_cache(tlb_name, m_config->m_tlb_config, m_sid, new_lines);
-        if(m_config->m_tlb_config.tlb_latency > 0)
+        if(20 > 0)
         {
-            for(int i=0; i<m_config->m_tlb_config.tlb_latency; i++ )
+            for(int i=0; i<20; i++ )
         	tlb_latency_queue.push_back((mem_fetch*)NULL);
         }
     //}
@@ -2393,15 +2399,14 @@ void ldst_unit::cycle()
            }
        }
 
-   //GIRI added this here
-   	if (m_tlb) {
+   //GIRI added this here 	
+   }
+
+   if (m_tlb) {
    	        if (tlb_latency_queue[0] != NULL) {
+            //fprintf(stdout, "Fill for TLB called\n");
+            //tlb_latency_queue[0]->print(stdout, true);
 			m_tlb->fill(tlb_latency_queue[0], gpu_sim_cycle+gpu_tot_sim_cycle);
-		}
-   	        if (mf->get_tlb_miss()) {
-    			if((tlb_latency_queue[20-1]) == NULL){
-    				l1_latency_queue[20-1] = mf;
-			}
 		}
 		
 	 	for( unsigned stage = 0; stage<20-1; ++stage)
@@ -2410,7 +2415,6 @@ void ldst_unit::cycle()
 	 	          tlb_latency_queue[stage+1] = NULL;
 	 	}
    	}	
-   }
 
    m_L1T->cycle();
    m_L1C->cycle();
@@ -2428,9 +2432,16 @@ void ldst_unit::cycle()
    done &= shared_cycle(pipe_reg, rc_fail, type);
    done &= constant_cycle(pipe_reg, rc_fail, type);
    done &= texture_cycle(pipe_reg, rc_fail, type);
+
    if (tlb_cycle(pipe_reg, rc_fail, type))
-   	done &= memory_cycle(pipe_reg, rc_fail, type);
-   
+   	{
+       done &= memory_cycle(pipe_reg, rc_fail, type);
+    }
+    else
+    {
+        printf("RC fail is %d\n", rc_fail );
+    }
+    
    m_mem_rc = rc_fail;
 
    if (!done) { // log stall types and return
