@@ -1779,13 +1779,14 @@ bool ldst_unit::texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail,
 bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
 
-
+    //warp_inst_t *to_print = &inst;
     mem_stage_stall_type result = NO_RC_FAIL;
     if( inst.accessq_empty() )
         return result;
+    //to_print->print(stdout);
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
     std::list<cache_event> events;
-    printf("accessing for addr %x\n", mf->get_addr());
+    //printf("accessing for addr %x\n", mf->get_addr());
     //mf->print(stdout, 1);
     enum cache_request_status status = m_tlb->access(mf->get_addr(), mf, gpu_sim_cycle+gpu_tot_sim_cycle, events);
     if(mf->get_tlb_miss() == true){
@@ -2406,7 +2407,12 @@ void ldst_unit::cycle()
    	        if (tlb_latency_queue[0] != NULL) {
             //fprintf(stdout, "Fill for TLB called\n");
             //tlb_latency_queue[0]->print(stdout, true);
-			m_tlb->fill(tlb_latency_queue[0], gpu_sim_cycle+gpu_tot_sim_cycle);
+            //if(tlb_latency_queue[0]->get_addr() > 0 )
+            //{
+            //tlb_latency_queue[0]->print(stdout, true);
+            //}
+            m_tlb->fill(tlb_latency_queue[0], gpu_sim_cycle+gpu_tot_sim_cycle);
+            tlb_latency_queue[0] = NULL;
 		}
 		
 	 	for( unsigned stage = 0; stage<20-1; ++stage)
@@ -2429,6 +2435,8 @@ void ldst_unit::cycle()
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
    bool done = true;
+
+
    done &= shared_cycle(pipe_reg, rc_fail, type);
    done &= constant_cycle(pipe_reg, rc_fail, type);
    done &= texture_cycle(pipe_reg, rc_fail, type);
@@ -2437,9 +2445,10 @@ void ldst_unit::cycle()
    	{
        done &= memory_cycle(pipe_reg, rc_fail, type);
     }
-    else
+    if ( rc_fail == COAL_STALL)
     {
-        printf("RC fail is %d\n", rc_fail );
+        done = false;
+       // printf("RC fail is %d\n", rc_fail );
     }
     
    m_mem_rc = rc_fail;
@@ -2447,7 +2456,7 @@ void ldst_unit::cycle()
    if (!done) { // log stall types and return
       assert(rc_fail != NO_RC_FAIL);
       m_stats->gpgpu_n_stall_shd_mem++;
-      m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++;
+      //m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++;
       return;
    }
 

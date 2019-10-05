@@ -413,24 +413,22 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     unsigned long long valid_timestamp = (unsigned)-1;
 
     bool all_reserved = true;
-    printf("We are probing addr %x, set_index %u, tag %x\n", addr, set_index, tag);
+   // printf("We are probing addr %x, set_index %u, tag %x\n", addr, set_index, tag);
     // check for hit or pending hit
     for (unsigned way=0; way<m_config.m_assoc; way++) {
         unsigned index = set_index*m_config.m_assoc+way;
         line_tlb_block *line = m_lines[index];
         if (line->m_tag == tag) {
-             line->print_status();
             if ( line->get_status() == RESERVED ) {
                 idx = index;
-    		printf("We got a hit reserved on addr %x, id %u, tag %x, way %u\n", addr, idx, tag, way);
+    		//printf("We got a hit reserved on addr %x, id %u, tag %x, way %u\n", addr, idx, tag, way);
                 return HIT_RESERVED;
             } else if ( line->get_status() == VALID ) {
                 idx = index;
-                printf("We got a hit on addr %x, idx %u, tag %x, way %u\n", addr, idx, tag, way);
+                //printf("We got a hit on addr %x, idx %u, tag %x, way %u\n", addr, idx, tag, way);
                 return HIT;
             }else {
                 assert( line->get_status() == INVALID );
-                printf("We got an Invalid line:");
             }
         }
         if (!line->is_reserved_line()) {
@@ -456,7 +454,7 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     }
     if ( all_reserved ) {
         //assert( m_config.m_alloc_policy == ON_MISS ); 
-    	printf("We got a reservation fail miss on addr %x\n", addr);
+    	//printf("We got a reservation fail miss on addr %x\n", addr);
         return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
     }
 
@@ -475,7 +473,7 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     //    			 return SECTOR_MISS;
     //    	}
     //}
-    printf("We got a miss on addr %x, set_index %u, tag %x\n", addr, idx, tag);
+    //printf("We got a miss on addr %x, set_index %u, tag %x\n", addr, idx, tag);
 
     return MISS;
 }

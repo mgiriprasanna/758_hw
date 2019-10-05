@@ -794,7 +794,7 @@ public:
     	{
 		m_line_sz = 8;
 		m_nset = 1024;
-		m_assoc = 1;
+		m_assoc = 1024;
 		m_replacement_policy = LRU;
 		m_alloc_policy = ON_MISS;
         m_line_sz_log2 = LOGB2(m_line_sz);
