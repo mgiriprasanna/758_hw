@@ -1467,7 +1467,12 @@ void ldst_unit::print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& d
        m_L1D->print( fp, dl1_accesses, dl1_misses );
    }
 }
-
+//GIRI
+void ldst_unit::print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses ) {
+   if( m_tlb ) {
+       m_tlb->print( fp, tlb_accesses, tlb_misses );
+   }
+}
 void ldst_unit::get_cache_stats(cache_stats &cs) {
     // Adds stats to 'cs' from each cache
     if(m_L1D)
@@ -1476,7 +1481,9 @@ void ldst_unit::get_cache_stats(cache_stats &cs) {
         cs += m_L1C->get_stats();
     if(m_L1T)
         cs += m_L1T->get_stats();
-
+    if(m_tlb)
+        cs += m_tlb->get_stats();
+	
 }
 
 void ldst_unit::get_L1D_sub_stats(struct cache_sub_stats &css) const{
@@ -1490,6 +1497,11 @@ void ldst_unit::get_L1C_sub_stats(struct cache_sub_stats &css) const{
 void ldst_unit::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     if(m_L1T)
         m_L1T->get_sub_stats(css);
+}
+//GIRI
+void ldst_unit::get_tlb_sub_stats(struct cache_sub_stats &css) const{
+    if(m_tlb)
+        m_tlb->get_sub_stats(css);
 }
 
 void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
@@ -1779,31 +1791,24 @@ bool ldst_unit::texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail,
 bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
 
-    //warp_inst_t *to_print = &inst;
     mem_stage_stall_type result = NO_RC_FAIL;
     if( inst.accessq_empty() )
         return result;
-    //to_print->print(stdout);
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
     std::list<cache_event> events;
-    //printf("accessing for addr %x\n", mf->get_addr());
-    //mf->print(stdout, 1);
     enum cache_request_status status = m_tlb->access(mf->get_addr(), mf, gpu_sim_cycle+gpu_tot_sim_cycle, events);
     if(mf->get_tlb_miss() == true){
     if((tlb_latency_queue[19]) == NULL){
-    				//fprintf(stdout, "Inserting mf in tlb called");
                     tlb_latency_queue[19] = mf;
     }
     }
-    //return 1;
     if (status != HIT) {
-    stall_reason = COAL_STALL;
-    return 0;
+    	stall_reason = COAL_STALL;
+    	return 0;
     }
     else {
 	return 1;
     } 
-
 
 }
 
@@ -2156,19 +2161,19 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
         		l1_latency_queue.push_back((mem_fetch*)NULL);
 	    }
     }
-    //GIRI ADDED HERE	
+    //GIRI: Here we check if TLB is enabled and then we create a new tlb	
     //if( !m_config->m_tlb_config.disabled() ) {
         char tlb_name[STRSIZE];
         snprintf(tlb_name, STRSIZE, "tlb_%03d", m_sid);
 	line_tlb_block** new_lines;
-	new_lines = new line_tlb_block*[1024*1024];
-	for (unsigned i = 0; i<1024*1024; i++)
+	new_lines = new line_tlb_block*[m_config->m_tlb_config.get_num_lines()]; //TODO: Giri need to pick this up from config
+	for (unsigned i = 0; i<m_config->m_tlb_config.get_num_lines(); i++)
 		new_lines[i] = new line_tlb_block();
 	
         m_tlb = new tlb_cache(tlb_name, m_config->m_tlb_config, m_sid, new_lines);
-        if(20 > 0)
+        if(m_config->m_tlb_config.get_tlb_latency() > 0) //TODO: Giri need to add latency in config
         {
-            for(int i=0; i<20; i++ )
+            for(int i=0; i<m_config->m_tlb_config.get_tlb_latency(); i++ )
         	tlb_latency_queue.push_back((mem_fetch*)NULL);
         }
     //}
@@ -2405,17 +2410,11 @@ void ldst_unit::cycle()
 
    if (m_tlb) {
    	        if (tlb_latency_queue[0] != NULL) {
-            //fprintf(stdout, "Fill for TLB called\n");
-            //tlb_latency_queue[0]->print(stdout, true);
-            //if(tlb_latency_queue[0]->get_addr() > 0 )
-            //{
-            //tlb_latency_queue[0]->print(stdout, true);
-            //}
-            m_tlb->fill(tlb_latency_queue[0], gpu_sim_cycle+gpu_tot_sim_cycle);
-            tlb_latency_queue[0] = NULL;
+            		m_tlb->fill(tlb_latency_queue[0], gpu_sim_cycle+gpu_tot_sim_cycle);
+            		tlb_latency_queue[0] = NULL;
 		}
-		
-	 	for( unsigned stage = 0; stage<20-1; ++stage)
+		//TODO: Giri replace latency from config	
+	 	for( unsigned stage = 0; stage<m_config->m_tlb_config.get_tlb_latency()-1; ++stage)
 	 	if( tlb_latency_queue[stage] == NULL) {
 	 	          tlb_latency_queue[stage] = tlb_latency_queue[stage+1] ;
 	 	          tlb_latency_queue[stage+1] = NULL;
@@ -2442,21 +2441,20 @@ void ldst_unit::cycle()
    done &= texture_cycle(pipe_reg, rc_fail, type);
 
    if (tlb_cycle(pipe_reg, rc_fail, type))
-   	{
+   {
        done &= memory_cycle(pipe_reg, rc_fail, type);
-    }
-    if ( rc_fail == COAL_STALL)
-    {
-        done = false;
-       // printf("RC fail is %d\n", rc_fail );
-    }
+   }
+   if ( rc_fail == COAL_STALL)
+   {
+       done = false;
+   }
     
    m_mem_rc = rc_fail;
 
    if (!done) { // log stall types and return
       assert(rc_fail != NO_RC_FAIL);
       m_stats->gpgpu_n_stall_shd_mem++;
-      //m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++;
+      //m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++; //TODO: Giri - commented out this stat. Nee to re-enable
       return;
    }
 
@@ -2693,6 +2691,23 @@ void gpgpu_sim::shader_print_cache_stats( FILE *fout ) const{
         fprintf(fout, "\tL1T_total_cache_pending_hits = %llu\n", total_css.pending_hits);
         fprintf(fout, "\tL1T_total_cache_reservation_fails = %llu\n", total_css.res_fails);
     }
+    // TLB : GIRI
+    if(1){
+        total_css.clear();
+        css.clear();
+        fprintf(fout, "tlb_cache:\n");
+        for ( unsigned i = 0; i < m_shader_config->n_simt_clusters; ++i ) {
+            m_cluster[i]->get_tlb_sub_stats(css);
+            total_css += css;
+        }
+        fprintf(fout, "\tTLB_total_cache_accesses = %llu\n", total_css.accesses);
+        fprintf(fout, "\tTLB_total_cache_misses = %llu\n", total_css.misses);
+        if(total_css.accesses > 0){
+            fprintf(fout, "\tTLB_total_cache_miss_rate = %.4lf\n", (double)total_css.misses / (double)total_css.accesses);
+        }
+        fprintf(fout, "\tTLB_total_cache_pending_hits = %llu\n", total_css.pending_hits);
+        fprintf(fout, "\tTLB_total_cache_reservation_fails = %llu\n", total_css.res_fails);
+    }
 }
 
 void gpgpu_sim::shader_print_l1_miss_stat( FILE *fout ) const
@@ -2757,6 +2772,20 @@ void gpgpu_sim::shader_print_l1_miss_stat( FILE *fout ) const
    }
    fprintf(fout, "\n");
    */
+}
+
+void gpgpu_sim::shader_print_tlb_miss_stat( FILE *fout ) const
+{
+   unsigned total_tlb_misses = 0, total_tlb_accesses = 0;
+   for ( unsigned i = 0; i < m_shader_config->n_simt_clusters; ++i ) {
+         unsigned cluster_tlb_misses = 0, cluster_tlb_accesses = 0;
+         m_cluster[ i ]->print_tlb_stats( fout, cluster_tlb_accesses, cluster_tlb_misses );
+         total_tlb_misses += cluster_tlb_misses;
+         total_tlb_accesses += cluster_tlb_accesses;
+   }
+   fprintf( fout, "total_tlb_misses=%d\n", total_tlb_misses );
+   fprintf( fout, "total_tlb_accesses=%d\n", total_tlb_accesses );
+   fprintf( fout, "total_tlb_miss_rate= %f\n", (float)total_tlb_misses / (float)total_tlb_accesses );
 }
 
 void warp_inst_t::print( FILE *fout ) const
@@ -3502,6 +3531,10 @@ void shader_core_ctx::store_ack( class mem_fetch *mf )
 void shader_core_ctx::print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses ) {
    m_ldst_unit->print_cache_stats( fp, dl1_accesses, dl1_misses );
 }
+//GIRI
+void shader_core_ctx::print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses ) {
+   m_ldst_unit->print_tlb_stats( fp, tlb_accesses, tlb_misses );
+}
 
 void shader_core_ctx::get_cache_stats(cache_stats &cs){
     // Adds stats from each cache to 'cs'
@@ -3522,7 +3555,10 @@ void shader_core_ctx::get_L1C_sub_stats(struct cache_sub_stats &css) const{
 void shader_core_ctx::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     m_ldst_unit->get_L1T_sub_stats(css);
 }
-
+//GIRI added this here
+void shader_core_ctx::get_tlb_sub_stats(struct cache_sub_stats &css) const{
+    m_ldst_unit->get_tlb_sub_stats(css);
+}
 void shader_core_ctx::get_icnt_power_stats(long &n_simt_to_mem, long &n_mem_to_simt) const{
 	n_simt_to_mem += m_stats->n_simt_to_mem[m_sid];
 	n_mem_to_simt += m_stats->n_mem_to_simt[m_sid];
@@ -4111,6 +4147,12 @@ void simt_core_cluster::print_cache_stats( FILE *fp, unsigned& dl1_accesses, uns
       m_core[ i ]->print_cache_stats( fp, dl1_accesses, dl1_misses );
    }
 }
+//GIRI
+void simt_core_cluster::print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses ) const {
+   for ( unsigned i = 0; i < m_config->n_simt_cores_per_cluster; ++i ) {
+      m_core[ i ]->print_tlb_stats( fp, tlb_accesses, tlb_misses );
+   }
+}
 
 void simt_core_cluster::get_icnt_stats(long &n_simt_to_mem, long &n_mem_to_simt) const {
 	long simt_to_mem=0;
@@ -4172,7 +4214,18 @@ void simt_core_cluster::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     }
     css = total_css;
 }
-
+//GIRI
+void simt_core_cluster::get_tlb_sub_stats(struct cache_sub_stats &css) const{
+    struct cache_sub_stats temp_css;
+    struct cache_sub_stats total_css;
+    temp_css.clear();
+    total_css.clear();
+    for ( unsigned i = 0; i < m_config->n_simt_cores_per_cluster; ++i ) {
+        m_core[i]->get_tlb_sub_stats(temp_css);
+        total_css += temp_css;
+    }
+    css = total_css;
+}
 void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t, unsigned tid)
 {
     if(inst.isatomic())

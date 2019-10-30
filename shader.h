@@ -1254,10 +1254,13 @@ public:
     void print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses );
     void get_cache_stats(unsigned &read_accesses, unsigned &write_accesses, unsigned &read_misses, unsigned &write_misses, unsigned cache_type);
     void get_cache_stats(cache_stats &cs);
-
+    //GIRI
+    void print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses );
+    
     void get_L1D_sub_stats(struct cache_sub_stats &css) const;
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
+    void get_tlb_sub_stats(struct cache_sub_stats &css) const; //GIRI
 
 protected:
     ldst_unit( mem_fetch_interface *icnt,
@@ -1287,7 +1290,7 @@ protected:
    bool constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool memory_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
-   //GIRI
+   //GIRI: Function declaration of tlb_cycle
    bool tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
 
    virtual mem_stage_stall_type process_cache_access( cache_t* cache,
@@ -1833,12 +1836,15 @@ public:
     std::list<unsigned> get_regs_written( const inst_t &fvt ) const;
     const shader_core_config *get_config() const { return m_config; }
     void print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses );
+    //GIRI
+    void print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses );
 
     void get_cache_stats(cache_stats &cs);
     void get_L1I_sub_stats(struct cache_sub_stats &css) const;
     void get_L1D_sub_stats(struct cache_sub_stats &css) const;
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
+    void get_tlb_sub_stats(struct cache_sub_stats &css) const; //GIRI
 
     void get_icnt_power_stats(long &n_simt_to_mem, long &n_mem_to_simt) const;
 
@@ -2105,12 +2111,15 @@ public:
 
     void display_pipeline( unsigned sid, FILE *fout, int print_mem, int mask );
     void print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses ) const;
+    //GIRI
+    void print_tlb_stats( FILE *fp, unsigned& tlb_accesses, unsigned& tlb_misses ) const;
 
     void get_cache_stats(cache_stats &cs) const;
     void get_L1I_sub_stats(struct cache_sub_stats &css) const;
     void get_L1D_sub_stats(struct cache_sub_stats &css) const;
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
+    void get_tlb_sub_stats(struct cache_sub_stats &css) const; //GIRI
 
     void get_icnt_stats(long &n_simt_to_mem, long &n_mem_to_simt) const;
     float get_current_occupancy( unsigned long long& active, unsigned long long & total ) const;

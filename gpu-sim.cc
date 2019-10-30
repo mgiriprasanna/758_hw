@@ -259,11 +259,11 @@ void shader_core_config::reg_options(class OptionParser * opp)
                  "0");
     option_parser_register(opp, "-gpgpu_cache:tlb", OPT_CSTR, &m_tlb_config.m_config_string,
                    "per-shader tlb config "
-                   " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq> | none}",
-                   "none" );
+                   " {<nsets>:<bsize>:<assoc>:<wr>:<alloc> | none}",
+                   "1:8:128:L:m" );
     option_parser_register(opp, "-tlb_latency", OPT_UINT32, &m_tlb_config.tlb_latency,
                  "TLB Miss Latency",
-                 "0");
+                 "20");
     option_parser_register(opp, "-smem_latency", OPT_UINT32, &smem_latency,
                  "smem Latency",
                  "3");
@@ -1753,6 +1753,7 @@ void gpgpu_sim::cycle()
                shader_print_l1_miss_stat( stdout );
             if (m_config.gpu_runtime_stat_flag & GPU_RSTAT_SCHED) 
                shader_print_scheduler_stat( stdout, false );
+	    shader_print_tlb_miss_stat( stdout ); //GIRI
          }
       }
 
