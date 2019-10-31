@@ -777,31 +777,69 @@ protected:
 class tlb_config : public cache_config{
 public:
 	tlb_config() : cache_config(){
-        m_valid = false; 
-        m_disabled = false;
-        m_config_string = NULL; // set by option parser
-        m_config_stringPrefL1 = NULL;
-        m_config_stringPrefShared = NULL;
-        m_data_port_width = 0;
-        m_set_index_function = LINEAR_SET_FUNCTION;
-        m_is_streaming = false;
-	m_line_sz = 0;
-	m_nset = 0;
-	m_assoc = 0;
+        	m_valid = false; 
+        	m_disabled = false;
+        	m_config_string = NULL; // set by option parser
+        	m_config_stringPrefL1 = NULL;
+        	m_config_stringPrefShared = NULL;
+        	m_data_port_width = 0;
+        	m_set_index_function = LINEAR_SET_FUNCTION;
+        	m_is_streaming = false;
+		m_line_sz = 0;
+		m_nset = 0;
+		m_assoc = 0;
 	}
-	//virtual unsigned set_index(new_addr_type addr) const;
-    	void init(char * config, FuncCache status)
-    	{
-		m_line_sz = 8;
-		m_nset = 1024;
-		m_assoc = 1024;
-		m_replacement_policy = LRU;
-		m_alloc_policy = ON_MISS;
+    void init(char * config, FuncCache status)
+    {
+    	cache_status= status;
+        assert( config );
+        char rp, ap;
+
+
+        int ntok = sscanf(config,"%u:%u:%u:%c:%c",
+                          &m_nset, &m_line_sz, &m_assoc, &rp, &ap);
+
+        if ( ntok < 5 ) {
+            if ( !strcmp(config,"none") ) {
+                m_disabled = true;
+                return;
+            }
+            exit_parse_error();
+        }
+
+        switch (rp) {
+               case 'L': m_replacement_policy = LRU; break;
+               case 'F': m_replacement_policy = FIFO; break;
+               default: exit_parse_error();
+        }
+        switch (ap) {
+        case 'm': m_alloc_policy = ON_MISS; break;
+        case 'f': m_alloc_policy = ON_FILL; break;
+        case 's': m_alloc_policy = STREAMING; break;
+        default: exit_parse_error();
+        }
+        
         m_line_sz_log2 = LOGB2(m_line_sz);
         m_nset_log2 = LOGB2(m_nset);
         m_valid = true;
+        m_atom_sz = (m_cache_type == SECTOR)? SECTOR_SIZE : m_line_sz;
         original_m_assoc = m_assoc;
-	}
+	tlb_latency = 20;
+    }	
+	//void init(char * config, FuncCache status)
+    	//{
+	//	m_line_sz = 8;
+	//	m_nset = 1024;
+	//	m_assoc = 1024;
+	//	m_replacement_policy = LRU;
+	//	m_alloc_policy = ON_MISS;
+        //	m_line_sz_log2 = LOGB2(m_line_sz);
+        //	m_nset_log2 = LOGB2(m_nset);
+        //	m_valid = true;
+        //	tlb_latency = 20;
+        //	original_m_assoc = m_assoc;
+	//}
+	unsigned get_tlb_latency() { return tlb_latency; }
 	unsigned tlb_latency;
 };
 
@@ -1597,6 +1635,7 @@ public:
                 std::list<cache_event> &events );
 };
 
+//GIRI: Extended cache_block_t to create class for TLB line
 struct line_tlb_block: public cache_block_t {
 	line_tlb_block()
 	{
@@ -1688,145 +1727,6 @@ private:
 	    enum cache_block_state    	   m_status;
 };
 
-//
-//class tlb_config {
-//public:
-//    tlb_config() 
-//    { 
-//        m_valid = false; 
-//        m_disabled = false;
-//        m_config_string = NULL; // set by option parser
-//        m_data_port_width = 0;
-//        l1_tlb_miss_latency = 20;
-//        l1_tlb_latency = 2;
-//    }
-//    void init(char * config) //, FuncCache status)
-//    {
-//	char rep_policy, allo_policy;
-//
-//        int ntok = sscanf(config,"%u:%u:%u,%c:%c",
-//                          &m_page_sz, &m_assoc, &m_nset, &rep_policy, &allo_policy);
-//
-//        if ( ntok < 5 ) {
-//            if ( !strcmp(config,"none") ) {
-//                m_disabled = true;
-//                return;
-//            }
-//            exit_parse_error();
-//        }
-//
-//        switch (rep_policy) {
-//               case 'L': m_replacement_policy = LRU; break;
-//               case 'F': m_replacement_policy = FIFO; break;
-//               default: exit_parse_error();
-//        }
-//        
-//	switch (allo_policy) {
-//        case 'm': m_alloc_policy = ON_MISS; break;
-//        case 'f': m_alloc_policy = ON_FILL; break;
-//        //case 's': m_alloc_policy = STREAMING; break;
-//        default: exit_parse_error();
-//        }
-//        
-//	m_line_sz_log2 = LOGB2(m_line_sz);
-//        m_nset_log2 = LOGB2(m_nset);
-//        m_valid = true;
-//        original_m_assoc = m_assoc;
-//        
-//	if (m_data_port_width == 0) {
-//            m_data_port_width = m_line_sz; 
-//        }
-//        assert(m_line_sz % m_data_port_width == 0); 
-//
-//    }
-//    bool disabled() const { return m_disabled;}
-//    
-//    unsigned get_line_sz() const
-//    {
-//        assert( m_valid );
-//        return m_line_sz;
-//    }
-//    
-//    unsigned get_num_lines() const
-//    {
-//        assert( m_valid );
-//        return m_nset * m_assoc;
-//    }
-//    
-//    void print( FILE *fp ) const
-//    {
-//        fprintf( fp, "TLB Size = %d B (%d Set x %d-way x %d byte line)\n", 
-//                 m_line_sz * m_nset * m_assoc,
-//                 m_nset, m_assoc, m_line_sz );
-//    }
-//
-//    virtual unsigned set_index( new_addr_type addr ) const
-//    {
-//        return(addr >> m_line_sz_log2) & (m_nset-1);
-//    }
-//
-//    new_addr_type tag( new_addr_type addr ) const
-//    {
-//        // For generality, the tag includes both index and tag. This allows for more complex set index
-//        // calculations that can result in different indexes mapping to the same set, thus the full
-//        // tag + index is required to check for hit/miss. Tag is now identical to the block address.
-//
-//        //return addr >> (m_line_sz_log2+m_nset_log2);
-//        return addr & ~(new_addr_type)(m_line_sz-1);
-//    }
-//    new_addr_type block_addr( new_addr_type addr ) const
-//    {
-//        return addr & ~(new_addr_type)(m_line_sz-1);
-//    }
-//    void set_assoc(unsigned n)
-//  	{
-//    	m_assoc = n;
-//	}
-//    unsigned get_nset() const
-//	{
-//		assert( m_valid );
-//		return m_nset;
-//	}
-//    unsigned get_total_size_inKB() const
-//	{
-//		assert( m_valid );
-//		return (m_assoc*m_nset*m_line_sz)/1024;
-//	}
-//    
-//    char *m_config_string;
-//    //char *m_config_stringPrefL1;
-//    //char *m_config_stringPrefShared;
-//    //FuncCache cache_status;
-//
-//protected:
-//    void exit_parse_error()
-//    {
-//        printf("GPGPU-Sim uArch: tlb configuration parsing error (%s)\n", m_config_string );
-//        abort();
-//    }
-//
-//    bool m_valid;
-//    bool m_disabled;
-//    unsigned m_line_sz;
-//    unsigned m_page_sz;
-//    unsigned m_line_sz_log2;
-//    unsigned m_nset;
-//    unsigned m_nset_log2;
-//    unsigned m_assoc;
-//    unsigned original_m_assoc;
-//    unsigned l1_tlb_miss_latency;
-//    unsigned l1_tlb_latency;
-//    enum replacement_policy_t m_replacement_policy; // 'L' = LRU, 'F' = FIFO
-//    enum allocation_policy_t m_alloc_policy;        // 'm' = allocate on miss, 'f' = allocate on fill
-//
-//
-//    //unsigned m_result_fifo_entries;
-//    unsigned m_data_port_width; //< number of byte the cache can access per cycle 
-//
-//    friend class tlb_array;
-//
-//};
-
 class tlb_array {
 public:
     // Use this constructor
@@ -1857,14 +1757,6 @@ public:
 	void update_cache_parameters(cache_config &config);
 	void add_pending_line(mem_fetch *mf);
 	void remove_pending_line(mem_fetch *mf);
-protected:
-    // This constructor is intended for use only from derived classes that wish to
-    // avoid unnecessary memory allocation that takes place in the
-    // other tag_array constructor
-    //tlb_array( tlb_config &config,
-    //           int core_id,
-    //           line_tlb_block** new_lines );
-    //void init( int core_id);
 
 protected:
 
@@ -1884,7 +1776,6 @@ protected:
     unsigned m_prev_snapshot_pending_hit;
 
     int m_core_id; // which shader core is using this
-    //int m_type_id; // what kind of cache is this (normal, texture, constant)
 
     bool is_used;  //a flag if the whole cache has ever been accessed before
 
@@ -1903,12 +1794,8 @@ public:
     void init( const char *name,
                const tlb_config &config,
 	       int core_id)
-               //mem_fetch_interface *memport,
-               //enum mem_fetch_status status )
     {
         m_name = name;
-        //m_memport=memport;
-        //m_miss_queue_status = status;
     }
 
     virtual ~tlb_cache()
@@ -1950,25 +1837,25 @@ public:
     virtual bool data_port_free() const {}; 
     virtual bool fill_port_free() const {}; 
 
-//    // Stat collection
-//    const cache_stats &get_stats() const {
-//        return m_stats;
-//    }
-//    unsigned get_stats(enum mem_access_type *access_type, unsigned num_access_type, enum cache_request_status *access_status, unsigned num_access_status)  const{
-//        return m_stats.get_stats(access_type, num_access_type, access_status, num_access_status);
-//    }
-//    void get_sub_stats(struct cache_sub_stats &css) const {
-//        m_stats.get_sub_stats(css);
-//    }
-//    // Clear per-window stats for AerialVision support
-//    void clear_pw(){
-//        m_stats.clear_pw();
-//    }
-//    // Per-window sub stats for AerialVision support
-//    void get_sub_stats_pw(struct cache_sub_stats_pw &css) const {
-//        m_stats.get_sub_stats_pw(css);
-//    }
-//
+    // Stat collection
+    const cache_stats &get_stats() const {
+        return m_stats;
+    }
+    unsigned get_stats(enum mem_access_type *access_type, unsigned num_access_type, enum cache_request_status *access_status, unsigned num_access_status)  const{
+        return m_stats.get_stats(access_type, num_access_type, access_status, num_access_status);
+    }
+    void get_sub_stats(struct cache_sub_stats &css) const {
+        m_stats.get_sub_stats(css);
+    }
+    // Clear per-window stats for AerialVision support
+    void clear_pw(){
+        m_stats.clear_pw();
+    }
+    // Per-window sub stats for AerialVision support
+    void get_sub_stats_pw(struct cache_sub_stats_pw &css) const {
+        m_stats.get_sub_stats_pw(css);
+    }
+
     //// This is a gapping hole we are poking in the system to quickly handle
     //// filling the cache on cudamemcopies. We don't care about anything other than
     //// L2 state after the memcopy - so just force the tag array to act as though
@@ -1998,8 +1885,6 @@ protected:
     tlb_array*  m_tlb_array;
     mem_fetch_interface *m_memport;
 
-    //typedef std::map<mem_fetch*,extra_mf_fields> extra_mf_fields_lookup;
-
     cache_stats m_stats;
 
     ///// Read miss handler without writeback
@@ -2009,66 +1894,6 @@ protected:
     //void send_read_request(new_addr_type addr, new_addr_type block_addr, unsigned cache_index, mem_fetch *mf,
     //		unsigned time, bool &do_miss, bool &wb, evicted_block_info &evicted, std::list<cache_event> &events, bool read_only, bool wa);
 };
-
-//class tlb_cache: public cache_t {
-//public:
-//    // Use this constructor
-//    tlb_array(tlb_config &config, int core_id);
-//    ~tlb_array();
-//
-//    enum cache_request_status probe( new_addr_type addr, unsigned &idx) const; //, mem_fetch* mf, bool probe_mode=false ) const;
-//    enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx); //, mem_fetch* mf );
-//
-//    void fill(new_addr_type addr, unsigned time); //, mem_fetch* mf );
-//    //void fill( unsigned idx, unsigned time, mem_fetch* mf );
-//    //void fill( new_addr_type addr, unsigned time, mem_access_sector_mask_t mask );
-//
-//    unsigned size() const { return m_config.get_num_lines();}
-//    line_tlb_block* get_block(unsigned idx) { return m_lines[idx];}
-//
-//	void update_cache_parameters(tlb_config &config);
-//	//void add_pending_line(mem_fetch *mf);
-//	//void remove_pending_line(mem_fetch *mf);
-//protected:
-//    // This constructor is intended for use only from derived classes that wish to
-//    // avoid unnecessary memory allocation that takes place in the
-//    // other tag_array constructor
-//    //tlb_array(tlb_config &config,int core_id);
-//		
-//               //int type_id,
-//               //cache_block_t** new_lines );
-//    
-//    void init(tlb_config &config, int core_id); //GIRI
-//
-//protected:
-//
-//    tlb_config &m_config;
-//
-//    //cache_block_t **m_lines; /* nbanks x nset x assoc lines in total */
-//
-//    unsigned m_access;
-//    unsigned m_miss;
-//    unsigned m_pending_hit; // number of cache miss that hit a line that is allocated but not filled
-//    unsigned m_res_fail;
-//    //unsigned m_sector_miss;
-//    line_tlb_block **m_lines; /* nbanks x nset x assoc lines in total */
-//
-//    // performance counters for calculating the amount of misses within a time window
-//    //unsigned m_prev_snapshot_access;
-//    //unsigned m_prev_snapshot_miss;
-//    //unsigned m_prev_snapshot_pending_hit;
-//
-//    int m_core_id; // which shader core is using this
-//    //int m_type_id; // what kind of cache is this (normal, texture, constant)
-//
-//    bool is_used;  //a flag if the whole cache has ever been accessed before
-//
-//    typedef std::unordered_map<unsigned, std::vector<line_tlb_block*>> tlb_struct;
-//    tlb_struct tlb;
-//    
-//    typedef tr1_hash_map<new_addr_type,unsigned> line_table;
-//    line_table pending_lines;
-//};
 
 /*****************************************************************************/
 

@@ -171,6 +171,14 @@ tlb_array::tlb_array( tlb_config &config,
     init(core_id);
 }
 
+tlb_array::~tlb_array() 
+{
+	unsigned m_lines_num = m_config.get_num_lines();
+	for(unsigned i=0; i<m_lines_num; ++i)
+		delete m_lines[i];
+    delete[] m_lines;
+}
+
 tag_array::~tag_array() 
 {
 	unsigned cache_lines_num = m_config.get_max_num_lines();
@@ -217,136 +225,6 @@ tag_array::tag_array( cache_config &config,
 
     init( core_id, type_id );
 }
-
-//void tlb_array::init(tlb_config &config, int core_id) {
-//    m_access = 0;
-//    m_miss = 0;
-//    m_pending_hit = 0;
-//    m_res_fail = 0;
-//    //m_num_access = 0;
-//    //m_prev_snapshot_pending_hit = 0;
-//    m_core_id = core_id; 
-//    is_used = false;
-//}
-//
-//enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx) const {
-//    	
-//    unsigned set_index = m_config.set_index(addr);
-//    new_addr_type tag = m_config.tag(addr);
-//
-//    unsigned invalid_line = (unsigned)-1;
-//    unsigned valid_line = (unsigned)-1;
-//    unsigned long long valid_timestamp = (unsigned)-1;
-//
-//    bool all_reserved = true;
-//   
-//    std::unordered_map<unsigned, std::vector<line_tlb_block*>>::const_iterator tlb_set = tlb.find(index);
-//
-//    // check for hit or pending hit
-//    for (unsigned way=0; way<m_config.m_assoc; way++) {
-//        unsigned index = set_index*m_config.m_assoc+way;
-//        line_tlb_block *line = tlb_set->second[way];
-//        if (line->m_tag == tag) {
-//         //   if ( line->get_status(mask) == RESERVED ) {
-//         //       idx = index;
-//         //       return HIT_RESERVED;
-//         //   } else if ( line->get_status(mask) == VALID ) {
-//         //       idx = index;
-//         //       return HIT;
-//         //   }else {
-//         //       assert( line->get_status(mask) == INVALID );
-//         //   }
-//        }
-//        if (!line->is_reserved_line()) {
-//            all_reserved = false;
-//            if (line->is_invalid_line()) {
-//                invalid_line = index;
-//            } else {
-//                // valid line : keep track of most appropriate replacement candidate
-//                if ( m_config.m_replacement_policy == LRU ) {
-//                    if ( line->get_last_access_time() < valid_timestamp ) {
-//                        valid_timestamp = line->get_last_access_time();
-//                        valid_line = index;
-//                    }
-//                } else if ( m_config.m_replacement_policy == FIFO ) {
-//                    if ( line->get_alloc_time() < valid_timestamp ) {
-//                        valid_timestamp = line->get_alloc_time();
-//                        valid_line = index;
-//                    }
-//                }
-//            }
-//        }
-//    }
-//    
-//    if ( all_reserved ) {
-//        assert( m_config.m_alloc_policy == ON_MISS ); 
-//        return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
-//    }
-//
-//    if ( invalid_line != (unsigned)-1 ) {
-//        idx = invalid_line;
-//    } else if ( valid_line != (unsigned)-1) {
-//        idx = valid_line;
-//    } else abort(); // if an unreserved block exists, it is either invalid or replaceable 
-//
-//
-//    //if(probe_mode && m_config.is_streaming()){
-//    //    	line_table::const_iterator i = pending_lines.find(m_config.block_addr(addr));
-//    //    	assert(mf);
-//    //    	if ( !mf->is_write() && i != pending_lines.end() ) {
-//    //    		 if(i->second != mf->get_inst().get_uid())
-//    //    			 return SECTOR_MISS;
-//    //    	}
-//    //}
-//
-//    return MISS;
-//}
-//
-//enum cache_request_status tlb_array::access( new_addr_type addr, unsigned time, unsigned &idx) {//, mem_fetch* f){
-//    //bool wb=false;
-//    //evicted_block_info evicted;
-//    //enum cache_request_status result = access(addr,time,idx,wb,evicted,mf);
-//    //assert(!wb);
-//    //return result;
-//    unsigned tlb_index = (unsigned)-1;
-//    m_access++;
-//    //is_used = true;
-//    unsigned set_index = m_config.set_index(addr);
-//    //shader_cache_access_log(m_core_id, m_type_id, 0); // log accesses to cache
-//    enum cache_request_status status = probe(addr, idx);
-//    
-//    switch (status) {
-//    case HIT_RESERVED:
-//        m_pending_hit++;
-//    case HIT: {
-//    	std::unordered_map<unsigned, std::vector<line_tlb_block*>>::const_iterator tlb_set = tlb.find(index);
-//	unsigned way = idx - set_index*m_config.m_assoc; 
-//        tlb_set->second[way]->set_last_access_time(time);
-//        break;
-//    }
-//    case MISS: {
-//        m_miss++;
-//        //shader_cache_access_log(m_core_id, m_type_id, 1); // log cache misses
-//    	std::unordered_map<unsigned, std::vector<line_tlb_block*>>::const_iterator tlb_set = tlb.find(index);
-//	unsigned way = idx - set_index*m_config.m_assoc; 
-//
-//	if (m_config.m_alloc_policy == ON_MISS) {
-//		tlb_set->second[way]->allocate(m_config.tag(addr), m_config.block_addr(addr), time);
-//	}	
-//
-//        break;
-//    }
-//    case RESERVATION_FAIL:
-//        m_res_fail++;
-//        //shader_cache_access_log(m_core_id, m_type_id, 1); // log cache misses
-//        break;
-//    default:
-//        fprintf( stderr, "tag_array::access - Error: Unknown"
-//            "cache_request_status %d\n", status );
-//        abort();
-//    }
-//    return status;
-//}
 
 void tlb_array::init( int core_id)
 {
@@ -396,6 +274,7 @@ void tag_array::remove_pending_line(mem_fetch *mf){
 	}
 }
 
+//GIRI: Added these member function definitions for tlb_array and tlb_cache
 enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, mem_fetch* mf, bool probe_mode) const {
 
 	probe(addr, idx);
@@ -404,7 +283,6 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, m
 
 
 enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, bool probe_mode, mem_fetch* mf) const {
-    //assert( m_config.m_write_policy == READ_ONLY );
     unsigned set_index = m_config.set_index(addr);
     new_addr_type tag = m_config.tag(addr);
 
@@ -413,7 +291,6 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     unsigned long long valid_timestamp = (unsigned)-1;
 
     bool all_reserved = true;
-   // printf("We are probing addr %x, set_index %u, tag %x\n", addr, set_index, tag);
     // check for hit or pending hit
     for (unsigned way=0; way<m_config.m_assoc; way++) {
         unsigned index = set_index*m_config.m_assoc+way;
@@ -465,14 +342,6 @@ enum cache_request_status tlb_array::probe( new_addr_type addr, unsigned &idx, b
     } else abort(); // if an unreserved block exists, it is either invalid or replaceable 
 
 
-    //if(probe_mode && m_config.is_streaming()){
-    //    	line_table::const_iterator i = pending_lines.find(m_config.block_addr(addr));
-    //    	assert(mf);
-    //    	if ( !mf->is_write() && i != pending_lines.end() ) {
-    //    		 if(i->second != mf->get_inst().get_uid())
-    //    			 return SECTOR_MISS;
-    //    	}
-    //}
     //printf("We got a miss on addr %x, set_index %u, tag %x\n", addr, idx, tag);
 
     return MISS;
@@ -490,6 +359,7 @@ enum cache_request_status tlb_array::access( new_addr_type addr, unsigned time,m
 
 enum cache_request_status tlb_array::access( new_addr_type addr, unsigned time, evicted_block_info &evicted, mem_fetch* mf )
 {
+    //printf("m_access is %u, m_miss is %u\n", m_access, m_miss);
     m_access++;
     mf->set_tlb_miss(0);
     is_used = true;
@@ -534,12 +404,12 @@ void tlb_array::fill( new_addr_type addr, unsigned time, mem_fetch* mf)
 
 void tlb_array::fill( new_addr_type addr, unsigned time)
 {
-    //assert( m_config.m_alloc_policy == ON_FILL );
     unsigned idx = unsigned(-1);
     enum cache_request_status status = probe(addr,idx);
-    //assert(status==MISS||status==SECTOR_MISS); // MSHR should have prevented redundant memory request
+    
     if(status==MISS)
     	m_lines[idx]->allocate( m_config.tag(addr), m_config.block_addr(addr), time);
+    
     if (status != RESERVATION_FAIL)
     {
         m_lines[idx]->fill(time);
@@ -762,6 +632,14 @@ void tag_array::new_window()
     m_prev_snapshot_pending_hit = m_pending_hit;
 }
 
+void tlb_array::print(FILE *stream, unsigned &total_access, unsigned &total_misses) const
+{
+    m_config.print(stream);
+    fprintf(stream, "\t\tAccess = %d, Miss = %d, PendingHit = %d\n",
+             m_access, m_miss, m_pending_hit);
+    total_misses+=(m_miss);
+}
+
 void tag_array::print( FILE *stream, unsigned &total_access, unsigned &total_misses ) const
 {
     m_config.print(stream);
@@ -770,6 +648,14 @@ void tag_array::print( FILE *stream, unsigned &total_access, unsigned &total_mis
              m_pending_hit, (float) m_pending_hit / m_access);
     total_misses+=(m_miss+m_sector_miss);
     total_access+=m_access;
+}
+
+void tlb_array::get_stats(unsigned &total_access, unsigned &total_misses, unsigned &total_hit_res, unsigned &total_res_fail) const{
+    // Update statistics from the tag array
+    total_access    = m_access;
+    total_misses    = m_miss;
+    total_hit_res   = m_pending_hit;
+    total_res_fail  = m_res_fail;
 }
 
 void tag_array::get_stats(unsigned &total_access, unsigned &total_misses, unsigned &total_hit_res, unsigned &total_res_fail) const{
